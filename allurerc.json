@@ -1,0 +1,9 @@
+{
+  "plugins": {
+    "awesome": {
+      "options": {
+        "reportLanguage": "ru"
+      }
+    }
+  }
+}

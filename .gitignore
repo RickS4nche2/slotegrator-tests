@@ -22,3 +22,23 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+# Сборка, отчёты и локальные рабочие файлы
+/target/
+/work/
+/.allure/
+/allure-results/
+/allure-report/
+/.playwright-cli/
+/output/playwright/
+
+# Локальные настройки и реквизиты
+/.env
+/.env.*
+!/.env.example
+*.local.properties
+
+# Редакторы и macOS
+/.idea/
+*.iml
+.DS_Store
