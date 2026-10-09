@@ -2,18 +2,26 @@ package qa.slotegrator.helpers.reporting;
 
 /** Явные признаки известных нарушений; сообщения и stack trace не участвуют в классификации. */
 public enum KnownFailure {
-    LOGIN_STATUS_201("Вход вернул 201 вместо документированного 200"), TOKEN_ACCESS_TOKEN_MISSING(
-            "Вместо TokenDTO возвращён непустой accessToken"), PLAYER_ID_NOT_INTEGER(
+    LOGIN_STATUS_201("BUG-001", "Вход вернул 201 вместо документированного 200"), TOKEN_ACCESS_TOKEN_MISSING("BUG-002",
+            "Вместо TokenDTO возвращён непустой accessToken"), PLAYER_ID_NOT_INTEGER("BUG-003",
                     "Модель игрока содержит строковый 24-hex ID вместо целочисленного id"), PROFILE_STATUS_201(
-                            "Профиль вернул 201 вместо требуемого заданием 200"), LIST_ROOT_ARRAY(
+                            "BUG-004", "Профиль вернул 201 вместо требуемого заданием 200"), LIST_ROOT_ARRAY("BUG-005",
                                     "OpenAPI описывает объект, API возвращает массив игроков"), BASIC_AUTH_IGNORED(
+                                            "BUG-006",
                                             "Вход без действительного Basic выдал токен с HTTP 201 вместо отказа 401"), CREATE_INVALID_ACCEPTED(
+                                                    "BUG-008",
                                                     "Некорректный DTO создал одну запись с HTTP 201 вместо отказа 400");
 
+    private final String bug;
     private final String description;
 
-    KnownFailure(String description) {
+    KnownFailure(String bug, String description) {
+        this.bug = bug;
         this.description = description;
+    }
+
+    public String bug() {
+        return bug;
     }
 
     public String description() {
@@ -37,6 +45,10 @@ public enum KnownFailure {
         private Violation(KnownFailure failure) {
             super(failure.description);
             this.failure = failure;
+        }
+
+        public KnownFailure failure() {
+            return failure;
         }
     }
 }

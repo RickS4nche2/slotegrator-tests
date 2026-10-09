@@ -20,34 +20,6 @@ public record ApiSettings(URI baseUri, Duration connectTimeout, Duration readTim
         validateTimeout(readTimeout, "READ_TIMEOUT_MS");
     }
 
-    public static ApiSettings fromEnvironment() {
-        return new ApiSettings(
-                baseUriFromEnvironment(),
-                timeoutFromEnvironment("CONNECT_TIMEOUT_MS", 5_000),
-                timeoutFromEnvironment("READ_TIMEOUT_MS", 15_000));
-    }
-
-    private static URI baseUriFromEnvironment() {
-        try {
-            return URI.create(environmentOrDefault("BASE_URL", "https://testslotegrator.com"));
-        } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("BASE_URL должен быть корректным URI");
-        }
-    }
-
-    private static Duration timeoutFromEnvironment(String name, long defaultMillis) {
-        try {
-            return Duration.ofMillis(Long.parseLong(environmentOrDefault(name, Long.toString(defaultMillis))));
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(name + " должен быть целым числом миллисекунд");
-        }
-    }
-
-    private static String environmentOrDefault(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? fallback : value.trim();
-    }
-
     private static void validateTimeout(Duration timeout, String name) {
         Objects.requireNonNull(timeout, "Нужен таймаут " + name);
         if (timeout.compareTo(Duration.ofMillis(1)) < 0

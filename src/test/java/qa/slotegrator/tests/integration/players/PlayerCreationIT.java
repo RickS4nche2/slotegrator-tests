@@ -191,7 +191,9 @@ class PlayerCreationIT {
      * Steps: подтвердить соседа, нарушить ограничение нового запроса, создать и перечитать до teardown.
      * Expected: 400 по принятому правилу проекта; см. docs/api-spec.md.
      * Новая запись отсутствует, исходный снимок сохранён.
-     * Для длины и числового типа пароли совпадают: проверка равенства не подменяет нужное ограничение.
+     * Для числового типа пароли совпадают: проверка равенства не подменяет нужное ограничение.
+     * Короткие пароли проверяет rejectsMatchingShortPasswords. Отсутствие или null одного пароля неизбежно
+     * делает пару неравной; это ограничение изоляции причины для MISSING/NULL.
      */
     @ParameterizedTest(name = "PlayerRequestDTO: {0}")
     @MethodSource("invalidPlayers")
@@ -208,8 +210,7 @@ class PlayerCreationIT {
         var neighbour = context.preparePlayer("Контрольный");
         var request = context.newPlayerRequest("Отклоняемый");
         var body = invalid.apply((ObjectNode) context.codec().tree(context.codec().encode(request)));
-        if (invalid.field().startsWith("password_")
-                && (invalid.violation() == Violation.TOO_SHORT || invalid.violation() == Violation.NUMBER)) {
+        if (invalid.field().startsWith("password_") && invalid.violation() == Violation.NUMBER) {
             String pair = "password_change".equals(invalid.field()) ? "password_repeat" : "password_change";
             body.set(pair, body.get(invalid.field()).deepCopy());
         }

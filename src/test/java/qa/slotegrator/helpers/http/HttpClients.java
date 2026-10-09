@@ -33,15 +33,12 @@ public final class HttpClients {
     private HttpClients() {
     }
 
-    /** Кодеки и интерфейс API добавляются вызывающим кодом после выбора моделей. */
-    public static Feign.Builder feign(ApiSettings settings) {
-        return feign(settings, new JsonCodec());
-    }
-
-    public static Feign.Builder feign(ApiSettings settings, JsonCodec codec) {
+    /** Транспорт передаётся явно: стандартный клиент Feign повторяет запросы при обрыве соединения. */
+    public static Feign.Builder feign(ApiSettings settings, JsonCodec codec, Client transport) {
         Objects.requireNonNull(settings, "Нужны настройки HTTP");
+        Objects.requireNonNull(transport, "Нужен транспорт без повторов");
         return Feign.builder()
-                .client(feignTransport())
+                .client(transport)
                 .encoder((object, type, template) -> {
                     try {
                         new Jackson3Encoder(codec.mapper()).encode(object, type, template);
@@ -75,10 +72,6 @@ public final class HttpClients {
     }
 
     /** Каждый вызов возвращает новую спецификацию запроса без глобальных настроек Rest Assured. */
-    public static RequestSpecification restAssured(ApiSettings settings) {
-        return restAssured(settings, new JsonCodec());
-    }
-
     public static RequestSpecification restAssured(ApiSettings settings, JsonCodec codec) {
         Objects.requireNonNull(settings, "Нужны настройки HTTP");
         var httpConfig = HttpClientConfig.httpClientConfig()

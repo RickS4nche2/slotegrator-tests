@@ -109,7 +109,7 @@ public final class ExpectedFailureFixtures {
                 case KNOWN_PLAYER_ID -> PublishedContractExpected.verifyPlayerSchema(player(true), codec);
                 case KNOWN_PROFILE -> PublishedContractExpected.verifyProfileStatus(HttpResult.json(201, "{}"));
                 case KNOWN_LIST -> PublishedContractExpected.verifyListSchema(HttpResult.json(200, "[]"), codec);
-                case KNOWN_BASIC -> AuthenticationExpected.verifyRejectedLogin(HttpResult.json(201, TOKEN), 401, codec);
+                case KNOWN_BASIC -> AuthenticationExpected.verifyRejectedBasic(HttpResult.json(201, TOKEN), codec);
                 case KNOWN_CREATE -> rejectedCreation(1, false);
                 case XPASS, UNSELECTED -> PublishedContractExpected.verifyLoginStatus(HttpResult.json(200, "{}"));
                 case WRONG_STATUS -> PublishedContractExpected.verifyLoginStatus(HttpResult.json(500, "{}"));
@@ -126,7 +126,7 @@ public final class ExpectedFailureFixtures {
                 case TOKEN_ERROR ->
                     PublishedContractExpected.verifyTokenSchema(HttpResult.json(201, "{\"error\":\"failure\"}"), codec);
                 case BASIC_WITHOUT_TOKEN ->
-                    AuthenticationExpected.verifyRejectedLogin(HttpResult.json(201, "{}"), 401, codec);
+                    AuthenticationExpected.verifyRejectedBasic(HttpResult.json(201, "{}"), codec);
                 case LOGIN_TOKEN_AT_401 ->
                     AuthenticationExpected.verifyRejectedCredentials(HttpResult.json(401, TOKEN), codec);
                 case LOGIN_HTML_AT_401 -> AuthenticationExpected

@@ -43,27 +43,29 @@ class PlayerDeletionIT {
     }
 
     /**
-     * Design: переход существующей цели в отсутствие; сосед различает удаление лишних записей.
-     * Steps: создать и подтвердить двух игроков, удалить цель, прочитать состояние до teardown.
-     * Expected: 200 и _id цели; цель отсутствует по ID/email/username, остальные записи неизменны.
+     * Design: переход существующей цели в отсутствие; соседи различают удаление лишних записей.
+     * Цель создаётся между двумя соседями: ошибочное удаление самой старой или самой новой записи заметно.
+     * Steps: создать и подтвердить трёх игроков, удалить среднего, прочитать состояние до teardown.
+     * Expected: 200 и ID цели; цель отсутствует по ID/email/username, остальные записи неизменны.
      */
     @Test
     @Tag("smoke")
-    @DisplayName("Удаление убирает только целевого игрока и сохраняет контрольного соседа")
+    @DisplayName("Удаление убирает только целевого игрока и сохраняет контрольных соседей")
     @Tag("DELETE-01")
     void deletesOnlyOwnTarget() {
-        var neighbour = context.preparePlayer("Контрольный");
+        var older = context.preparePlayer("Контрольный старший");
         var target = context.preparePlayer("Целевой");
+        var newer = context.preparePlayer("Контрольный младший");
         var before = Allure.step("Прочитать исходное состояние перед удалением",
                 () -> context.snapshot());
-        Allure.step("Подтвердить существование цели и контрольного игрока перед удалением",
-                () -> PlayersExpected.verifyOwnPlayers(before, List.of(target, neighbour)));
+        Allure.step("Подтвердить существование цели и контрольных игроков перед удалением",
+                () -> PlayersExpected.verifyOwnPlayers(before, List.of(older, target, newer)));
 
         var response = Allure.step("Удалить только подтверждённого целевого игрока",
                 () -> context.delete(target, AuthorizationMode.VALID));
         var after = Allure.step("Прочитать состояние после удаления до резервной очистки",
                 () -> context.snapshot());
-        Allure.step("DELETE вернул HTTP 200 и удалил только цель, сохранив контрольного игрока",
+        Allure.step("DELETE вернул HTTP 200 и удалил только цель, сохранив контрольных игроков",
                 () -> PlayersExpected.verifyDeleted(response, target, before, after, context.codec()));
     }
 

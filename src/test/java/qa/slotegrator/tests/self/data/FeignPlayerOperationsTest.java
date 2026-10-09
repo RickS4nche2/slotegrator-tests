@@ -50,7 +50,8 @@ class FeignPlayerOperationsTest {
             });
             var runId = UUID.randomUUID();
             var journal = new CreationJournal(runId, operations(server));
-            assertThrows(IllegalStateException.class, () -> journal.create(PlayerData.player(runId, 1, "USD", "Анна")));
+            var request = PlayerData.player(runId, 1, "USD", "Анна");
+            assertThrows(IllegalStateException.class, () -> journal.beginAttempt(request.email(), request.username()));
             assertEquals(0, writes.get());
         }
     }

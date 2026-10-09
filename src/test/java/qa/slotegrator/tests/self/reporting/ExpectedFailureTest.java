@@ -78,15 +78,22 @@ class ExpectedFailureTest {
                 assertTrue(hasBugLink(result, bug, directory), "Ссылка на баг нужна и в строгом режиме");
                 assertTrue(hasBugAttachment(result, bug, directory.resolve("allure-results")),
                         "Описание бага нужно и в строгом режиме");
+            } else if (fixture.equals("Cleanup")) {
+                // Тело воспроизвело BUG-001 до сбоя очистки: ссылка уместна, но статус остаётся неуспешным.
+                assertTrue(hasBugLink(result, "BUG-001", directory), "Воспроизведённый дефект тела связан с багом");
+            } else if (!name.equals("XPASS")) {
+                assertTrue(result.get("links") == null || result.get("links").isEmpty(),
+                        fixture + ": посторонний исход не получает ссылку на баг");
+                assertEquals("", label(result, "knownBug"), fixture + ": посторонний исход не считается известным");
             }
             boolean xfail = enabled && !bug.isEmpty();
             boolean xpass = enabled && name.equals("XPASS");
-            boolean passed = name.equals("UNSELECTED") || name.equals("email:NULL")
-                    || !enabled && name.equals("XPASS");
+            boolean notReproduced = !enabled && name.equals("XPASS");
+            boolean passed = name.equals("UNSELECTED") || name.equals("email:NULL") || notReproduced;
             assertEquals(xfail ? "ABORTED" : passed ? "SUCCESSFUL" : "FAILED",
                     test.get("status").stringValue(), fixture + ": " + name);
-            assertEquals(xfail ? "XFAIL" : xpass ? "XPASS" : "", label(result, "expectedFailure"),
-                    fixture + ": посторонняя ошибка не должна получить XFAIL");
+            assertEquals(xfail ? "XFAIL" : xpass ? "XPASS" : notReproduced ? "NOT_REPRODUCED" : "",
+                    label(result, "expectedFailure"), fixture + ": посторонняя ошибка не должна получить XFAIL");
             if (xfail) {
                 assertEquals("skipped", result.get("status").stringValue());
                 assertEquals(bug, label(result, "knownBug"));

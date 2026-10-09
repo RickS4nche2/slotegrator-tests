@@ -59,8 +59,8 @@ class HttpClientsTest {
                 }
             });
             var input = player();
-            var client = HttpClients.feign(server.settings(), codec)
-                    .client(new ReportingFeignClient(HttpClients.feignTransport(), diagnostics))
+            var client = HttpClients.feign(server.settings(), codec,
+                    new ReportingFeignClient(HttpClients.feignTransport(), diagnostics))
                     .target(LocalApi.class, server.uri().toString());
             assertEquals(input, client.echo(input));
             assertTrue(actualBody.get().contains("dummy-http-password"), "В транспорт должна уйти исходная величина");
@@ -83,12 +83,15 @@ class HttpClientsTest {
                 exchange.sendResponseHeaders(307, -1);
                 exchange.close();
             });
-            var client = HttpClients.feign(server.settings()).target(LocalApi.class, server.uri().toString());
+            var client = HttpClients.feign(server.settings(), new JsonCodec(), HttpClients.feignTransport())
+                    .target(LocalApi.class, server.uri().toString());
             try (var result = client.redirect()) {
                 assertEquals(307, result.status());
             }
             assertEquals(307,
-                    RestAssured.given().spec(HttpClients.restAssured(server.settings())).get("/redirect").statusCode());
+                    RestAssured.given().spec(HttpClients.restAssured(server.settings(), new JsonCodec()))
+                            .get("/redirect")
+                            .statusCode());
         }
     }
 
@@ -104,8 +107,8 @@ class HttpClientsTest {
             });
             var codec = new JsonCodec();
             var diagnostics = new HttpDiagnostics(new ReportSanitizer(codec));
-            var client = HttpClients.feign(server.settings(), codec)
-                    .client(new ReportingFeignClient(HttpClients.feignTransport(), diagnostics))
+            var client = HttpClients.feign(server.settings(), codec,
+                    new ReportingFeignClient(HttpClients.feignTransport(), diagnostics))
                     .target(LocalApi.class, server.uri().toString());
             assertThrows(Exception.class, () -> client.drop(player()));
             assertEquals(1, calls.get());
@@ -133,8 +136,8 @@ class HttpClientsTest {
             });
             var codec = new JsonCodec();
             var diagnostics = new HttpDiagnostics(new ReportSanitizer(codec));
-            var client = HttpClients.feign(server.settings(), codec)
-                    .client(new ReportingFeignClient(HttpClients.feignTransport(), diagnostics))
+            var client = HttpClients.feign(server.settings(), codec,
+                    new ReportingFeignClient(HttpClients.feignTransport(), diagnostics))
                     .target(LocalApi.class, server.uri().toString());
             assertThrows(Exception.class, client::delete);
             assertEquals(1, calls.get(), "Feign должен передать ровно один DELETE");

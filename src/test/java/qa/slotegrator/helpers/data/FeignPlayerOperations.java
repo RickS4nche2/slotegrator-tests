@@ -8,7 +8,6 @@ import tools.jackson.databind.JsonNode;
 
 import qa.slotegrator.api.ObservedPlayerContract;
 import qa.slotegrator.api.client.PlayersApi;
-import qa.slotegrator.api.model.CreatePlayerRequest;
 import qa.slotegrator.api.model.ObservedPlayerResponse;
 import qa.slotegrator.api.model.PlayerId;
 import qa.slotegrator.helpers.http.HttpResult;
@@ -22,11 +21,6 @@ public final class FeignPlayerOperations implements PlayerOperations {
     public FeignPlayerOperations(PlayersApi api, JsonCodec codec) {
         this.api = api;
         this.codec = codec;
-    }
-
-    @Override
-    public HttpResult create(CreatePlayerRequest request) {
-        return HttpResult.read(api.create(request));
     }
 
     @Override

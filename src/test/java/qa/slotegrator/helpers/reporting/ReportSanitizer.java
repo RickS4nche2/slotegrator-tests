@@ -48,21 +48,7 @@ public final class ReportSanitizer {
 
     public String header(String name, String value) {
         if (HEADERS.contains(name.toLowerCase(Locale.ROOT)) || sensitiveField(name)) {
-            remember(value);
-            if (value.regionMatches(true, 0, "Bearer ", 0, 7))
-                remember(value.substring(7));
-            if (value.regionMatches(true, 0, "Basic ", 0, 6)) {
-                try {
-                    remember(value.substring(6));
-                    String decoded = new String(Base64.getDecoder().decode(value.substring(6)), StandardCharsets.UTF_8);
-                    remember(decoded);
-                    int separator = decoded.indexOf(':');
-                    if (separator >= 0)
-                        remember(decoded.substring(separator + 1));
-                } catch (IllegalArgumentException ignored) {
-                    // Полный заголовок всё равно скрывается.
-                }
-            }
+            rememberCredential(value);
             if (name.equalsIgnoreCase("Cookie") || name.equalsIgnoreCase("Set-Cookie")) {
                 String[] pairs = value.split(";");
                 int count = name.equalsIgnoreCase("Set-Cookie") ? Math.min(1, pairs.length) : pairs.length;
@@ -117,7 +103,26 @@ public final class ReportSanitizer {
         if (node.isObject() || node.isArray())
             node.forEach(this::collectValues);
         else if (!node.isNull())
-            remember(node.asString());
+            rememberCredential(node.asString());
+    }
+
+    /** Значение целиком и его части: токен после схемы Bearer, Base64 и пароль из Basic. */
+    private void rememberCredential(String value) {
+        remember(value);
+        if (value.regionMatches(true, 0, "Bearer ", 0, 7))
+            remember(value.substring(7));
+        if (value.regionMatches(true, 0, "Basic ", 0, 6)) {
+            try {
+                remember(value.substring(6));
+                String decoded = new String(Base64.getDecoder().decode(value.substring(6)), StandardCharsets.UTF_8);
+                remember(decoded);
+                int separator = decoded.indexOf(':');
+                if (separator >= 0)
+                    remember(decoded.substring(separator + 1));
+            } catch (IllegalArgumentException ignored) {
+                // Полное значение всё равно скрывается.
+            }
+        }
     }
 
     private JsonNode redact(JsonNode node) {
@@ -146,7 +151,9 @@ public final class ReportSanitizer {
 
     private static boolean sensitiveField(String name) {
         String normalized = name.replace("_", "").replace("-", "").toLowerCase(Locale.ROOT);
-        return normalized.contains("password") || normalized.contains("secret")
+        return normalized.contains("password") || normalized.contains("passwd") || normalized.equals("pass")
+                || normalized.equals("pwd") || normalized.contains("secret") || normalized.contains("session")
+                || normalized.contains("authorization") || normalized.equals("bearer") || normalized.equals("cookie")
                 || normalized.endsWith("token") || normalized.endsWith("apikey") || normalized.equals("jwt");
     }
 }

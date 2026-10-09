@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Objects;
 
+import feign.Client;
+import feign.Feign;
 import feign.auth.BasicAuthRequestInterceptor;
 import io.restassured.RestAssured;
 import io.restassured.specification.RequestSpecification;
@@ -33,6 +35,8 @@ public final class ApiSession {
     private final JsonCodec codec = new JsonCodec();
     private final ReportSanitizer sanitizer = new ReportSanitizer(codec);
     private final HttpDiagnostics diagnostics = new HttpDiagnostics(sanitizer);
+    // Один транспорт на сеанс; создание клиента не выполняет HTTP-запросов.
+    private final Client transport = new ReportingFeignClient(HttpClients.feignTransport(), diagnostics);
     private String token;
 
     public ApiSession(ApiSettings settings, AuthSettings auth) {
@@ -134,9 +138,8 @@ public final class ApiSession {
         return sanitizer;
     }
 
-    private feign.Feign.Builder builder() {
-        return HttpClients.feign(settings, codec)
-                .client(new ReportingFeignClient(HttpClients.feignTransport(), diagnostics));
+    private Feign.Builder builder() {
+        return HttpClients.feign(settings, codec, transport);
     }
 
     private void requireToken() {

@@ -1,5 +1,6 @@
 package qa.slotegrator.helpers.data;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -11,7 +12,6 @@ import java.util.stream.Collectors;
 
 import io.qameta.allure.Allure;
 
-import qa.slotegrator.api.model.CreatePlayerRequest;
 import qa.slotegrator.api.model.ObservedPlayerResponse;
 import qa.slotegrator.api.model.PlayerId;
 import qa.slotegrator.helpers.http.HttpResult;
@@ -25,12 +25,14 @@ public final class CreationJournal implements AutoCloseable {
         }
     }
 
+    private static final int CLEANUP_READ_ATTEMPTS = 3;
+    private static final int CLEANUP_ROUNDS = 3;
+    private static final Duration CLEANUP_READ_PAUSE = Duration.ofMillis(100);
     private final String marker;
     private final PlayerOperations operations;
     private final List<Attempt> attempts = new ArrayList<>();
     private final Map<String, ObservedPlayerResponse> originalPlayers = new LinkedHashMap<>();
     private final Map<String, ObservedPlayerResponse> owned = new LinkedHashMap<>();
-    private final Set<String> deletedIds = new LinkedHashSet<>();
     private final Set<String> uncertainOwnership = new LinkedHashSet<>();
     private final Set<String> unattributed = new LinkedHashSet<>();
     private boolean closed;
@@ -54,13 +56,6 @@ public final class CreationJournal implements AutoCloseable {
                 username != null && username.contains(marker) ? username : null, baseline));
     }
 
-    public HttpResult create(CreatePlayerRequest request) {
-        beginAttempt(request.email(), request.username());
-        HttpResult result = operations.create(request);
-        reconcile();
-        return result;
-    }
-
     /** До утверждений о статусе или модели ищем реально появившиеся собственные записи. */
     public void reconcile() {
         ensureOpen();
@@ -71,11 +66,6 @@ public final class CreationJournal implements AutoCloseable {
         return Set.copyOf(owned.keySet());
     }
 
-    /** ID конкретных DELETE, вернувших 200; исчезновение из списка не добавляет сюда запись. */
-    public Set<String> deletedIds() {
-        return Set.copyOf(deletedIds);
-    }
-
     /** Свежая проверка принадлежности перед отдельным проверяемым DELETE. */
     public void requireOwned(String id) {
         reconcile();
@@ -83,48 +73,56 @@ public final class CreationJournal implements AutoCloseable {
             throw new IllegalStateException("Удаление запрещено: актуальная принадлежность ID не подтверждена");
     }
 
+    /** Закрывает журнал без DELETE, если переданный актуальный снимок не содержит собственных записей. */
+    public boolean closeIfNothingRemains(List<ObservedPlayerResponse> current) {
+        ensureOpen();
+        reconcile(current);
+        Set<String> visible = ids(current);
+        unattributed.removeIf(id -> !visible.contains(id));
+        if (!owned.isEmpty() || !unattributed.isEmpty())
+            return false;
+        closed = true;
+        return true;
+    }
+
+    /**
+     * Удаляет подтверждённые собственные записи. Итог определяет последний снимок: промежуточный сбой чтения или
+     * DELETE, после которого записей не осталось, попадает в отчёт, но не делает очистку неуспешной.
+     */
     @Override
     public void close() {
         if (closed)
             return;
         closed = true;
         var problems = new ArrayList<CleanupFailure.Problem>();
-        try {
-            reconcile(operations.list());
-        } catch (Exception | AssertionError error) {
-            problems.add(problem("поиск перед очисткой", null, error));
-        }
-        for (String id : List.copyOf(owned.keySet())) {
+        // Собственный ID может впервые найтись при любом свежем чтении, например после потерянного ответа POST.
+        // Поэтому очередь пересобирается по проходам; число проходов ограничено, ID удаляется не более одного раза.
+        var decided = new LinkedHashSet<String>();
+        List<ObservedPlayerResponse> latest = null;
+        for (int round = 0; round < CLEANUP_ROUNDS; round++) {
             try {
-                // Каждый ID подтверждается заново: первый DELETE мог изменить владельца следующего.
-                reconcile(operations.list());
+                latest = readForCleanup();
+                reconcile(latest);
             } catch (Exception | AssertionError error) {
-                problems.add(problem("поиск перед DELETE", id, error));
-                continue;
+                latest = null;
+                problems.add(problem(round == 0 ? "поиск перед очисткой" : "повторный поиск", null, error));
             }
-            if (!owned.containsKey(id))
-                continue;
-            if (uncertainOwnership.contains(id)) {
-                problems.add(new CleanupFailure.Problem("принадлежность ID", id, "не подтверждена"));
-                continue;
-            }
-            try {
-                HttpResult result = operations.delete(id);
-                if (result.status() != 200) {
-                    problems.add(new CleanupFailure.Problem("DELETE", id, "HTTP " + result.status()));
-                } else {
-                    deletedIds.add(id);
-                }
-            } catch (Exception | AssertionError error) {
-                problems.add(problem("DELETE", id, error));
-            }
+            var pending = owned.keySet().stream().filter(id -> !decided.contains(id)).toList();
+            if (pending.isEmpty() && latest != null)
+                break;
+            if (!pending.isEmpty())
+                latest = null;
+            for (String id : pending)
+                deleteIfStillOwned(id, decided, problems);
         }
+        boolean verified = false;
         try {
             // Повторно ищем и по уникальным признакам попытки: запись могла получить другой ID.
-            List<ObservedPlayerResponse> after = operations.list();
+            List<ObservedPlayerResponse> after = latest != null ? latest : readForCleanup();
             reconcile(after);
             Set<String> remaining = ids(after);
             unattributed.removeIf(id -> !remaining.contains(id));
+            verified = true;
         } catch (Exception | AssertionError error) {
             problems.add(problem("проверка после очистки", null, error));
         }
@@ -132,9 +130,52 @@ public final class CreationJournal implements AutoCloseable {
         unresolved.addAll(unattributed);
         if (!unattributed.isEmpty())
             problems.add(new CleanupFailure.Problem("неподтверждённые записи", null, "принадлежность не установлена"));
-        if (!unresolved.isEmpty() || !problems.isEmpty()) {
+        if (!problems.isEmpty())
             Allure.attachment("Итог очистки", "Проблемы=" + problems + "; неподтверждённые ID=" + unresolved);
+        if (!verified || !unresolved.isEmpty())
             throw new CleanupFailure(problems, List.copyOf(unresolved));
+    }
+
+    /** Сбой свежего чтения оставляет ID в очереди следующего прохода; решение по ID принимается один раз. */
+    private void deleteIfStillOwned(String id, Set<String> decided, List<CleanupFailure.Problem> problems) {
+        try {
+            // Каждый ID подтверждается заново: предыдущий DELETE мог изменить владельца следующего.
+            reconcile(readForCleanup());
+        } catch (Exception | AssertionError error) {
+            problems.add(problem("поиск перед DELETE", id, error));
+            return;
+        }
+        decided.add(id);
+        if (!owned.containsKey(id))
+            return;
+        if (uncertainOwnership.contains(id)) {
+            problems.add(new CleanupFailure.Problem("принадлежность ID", id, "не подтверждена"));
+            return;
+        }
+        try {
+            HttpResult result = operations.delete(id);
+            if (result.status() != 200)
+                problems.add(new CleanupFailure.Problem("DELETE", id, "HTTP " + result.status()));
+        } catch (Exception | AssertionError error) {
+            problems.add(problem("DELETE", id, error));
+        }
+    }
+
+    /** Чтение списка идемпотентно; короткий повтор отделяет кратковременный сбой от недоступного снимка. */
+    private List<ObservedPlayerResponse> readForCleanup() {
+        for (int attempt = 1;; attempt++) {
+            try {
+                return operations.list();
+            } catch (RuntimeException | AssertionError error) {
+                if (attempt == CLEANUP_READ_ATTEMPTS)
+                    throw error;
+            }
+            try {
+                Thread.sleep(CLEANUP_READ_PAUSE.toMillis());
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Очистка прервана");
+            }
         }
     }
 

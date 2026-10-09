@@ -96,6 +96,18 @@ class PlayerStateExpectedTest {
         }
     }
 
+    /** Design: целочисленный ID. Steps: отказ с кодом 401 и отказ с самим ID. Expected: только второй — утечка. */
+    @Test
+    @DisplayName("Целочисленный ID ищется целым значением, а не цифрой внутри кода ошибки")
+    void matchesIntegerIdentifiersAsWholeValues() {
+        var player = new ObservedPlayerResponse("1", "int-player", "int@example.test", "Игрок", "Тестовый", "USD");
+        assertDoesNotThrow(() -> PlayersExpected.verifyNoPlayerIdentifiers(
+                HttpResult.json(401, "{\"statusCode\":401,\"message\":\"Unauthorized\"}"), List.of(player),
+                Set.of(), CODEC));
+        assertThrows(AssertionError.class, () -> PlayersExpected.verifyNoPlayerIdentifiers(
+                HttpResult.json(401, "{\"statusCode\":401,\"id\":1}"), List.of(player), Set.of(), CODEC));
+    }
+
     @Test
     @DisplayName("Один POST не должен незаметно создать две собственные записи")
     void rejectsDuplicateCreationBeforeCleanup() {
@@ -118,6 +130,14 @@ class PlayerStateExpectedTest {
     void rejectsCollateralDeletion() {
         assertThrows(AssertionError.class, () -> PlayersExpected.verifyDeleted(deletedResponse(TARGET_ID), TARGET,
                 BEFORE, List.of(FOREIGN), CODEC));
+    }
+
+    /** Design: DELETE игнорирует path id. Steps: удалить соседа, ответить ID цели. Expected: цель осталась — FAIL. */
+    @Test
+    @DisplayName("Удаление соседа вместо цели не проходит даже с ID цели в ответе")
+    void rejectsNeighbourDeletedInsteadOfTarget() {
+        assertThrows(AssertionError.class, () -> PlayersExpected.verifyDeleted(deletedResponse(TARGET_ID), TARGET,
+                BEFORE, List.of(FOREIGN, OWN), CODEC));
     }
 
     @Test

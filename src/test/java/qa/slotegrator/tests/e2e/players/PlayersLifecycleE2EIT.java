@@ -14,15 +14,16 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import qa.slotegrator.api.ApiContract;
 import qa.slotegrator.api.model.ObservedPlayerResponse;
 import qa.slotegrator.expecteds.PlayersExpected;
 import qa.slotegrator.expecteds.PublishedContractExpected;
 import qa.slotegrator.helpers.auth.AuthorizationMode;
 import qa.slotegrator.helpers.config.ProjectSettings;
+import qa.slotegrator.helpers.data.PlayerData;
 import qa.slotegrator.helpers.data.PlayersLifecycleExtension;
 import qa.slotegrator.helpers.data.PlayersTestContext;
 import qa.slotegrator.helpers.data.RegisteredPlayer;
+import qa.slotegrator.helpers.reporting.ContractDeviations;
 
 @Epic("Players API")
 @Feature("Жизненный цикл игроков")
@@ -43,14 +44,17 @@ class PlayersLifecycleE2EIT {
     @BeforeEach
     void prepareContext() {
         PlayersTestContext.requireAuthorized(System.getProperty("e2e.authorized", "false"));
+        Allure.parameter("Изоляция стенда", "не подтверждена: запуск разрешён флагом e2e.authorized");
         players = new PlayersTestContext(ProjectSettings.load());
     }
 
     /**
      * Design: шесть действий задания, переходы состояний и сохранность списка при сортировке.
      * Steps: вход, создание 12 игроков, чтение всех профилей, список и сортировка, удаление, пустой список.
-     * Expected: коды задания и опубликованная схема, уникальные ID, поля исходных запросов во всех чтениях;
-     * сортировка сохраняет полные записи, включая игроков с одинаковым именем. Итоговый список пуст.
+     * Expected: уникальные ID, поля исходных запросов во всех чтениях, адресное удаление, пустой итог;
+     * сортировка сохраняет полные записи, включая игроков с одинаковым именем. Нарушение этих свойств
+     * прерывает сценарий. Отклонения кодов и схем от задания и OpenAPI отмечаются в своих шагах, не мешают
+     * пройти все шесть действий и проваливают тест на последнем шаге.
      * Предусловие: явное разрешение ограниченного запуска; пустой список не доказывает изоляцию.
      * JUnit lifecycle очищает собственные данные при промежуточном падении. Требования — docs/api-spec.md.
      */
@@ -60,9 +64,13 @@ class PlayersLifecycleE2EIT {
     @Tag("E2E-02")
     void completePlayersLifecycle() {
         var run = players;
+        var deviations = new ContractDeviations();
         Allure.step("Получить токен тестера и проверить вход", () -> {
             var login = run.loginResponse();
-            PublishedContractExpected.verifyLoginStatus(login);
+            deviations.check("Код входа соответствует заданию: 200",
+                    () -> PublishedContractExpected.verifyLoginStatus(login));
+            deviations.check("Ответ входа соответствует TokenDTO",
+                    () -> PublishedContractExpected.verifyTokenSchema(login, run.codec()));
             run.authenticate(login);
         });
 
@@ -72,10 +80,12 @@ class PlayersLifecycleE2EIT {
             var result = new ArrayList<RegisteredPlayer>();
             for (int index = 0; index < requests.size(); index++) {
                 var request = requests.get(index);
-                var player = Allure.step("Создать игрока №" + (index + 1) + " и проверить исходные поля", () -> {
+                int number = index + 1;
+                var player = Allure.step("Создать игрока №" + number + " и проверить исходные поля", () -> {
                     var response = run.create(request);
                     var created = PlayersExpected.verifyCreated(response, request, run.ownedIds(), run.codec());
-                    ApiContract.player(run.codec().tree(response.body()));
+                    deviations.check("Ответ создания игрока №" + number + " соответствует PlayerResponseDTO",
+                            () -> PublishedContractExpected.verifyPlayerSchema(response, run.codec()));
                     return created;
                 });
                 result.add(new RegisteredPlayer(player.id(), request));
@@ -87,11 +97,14 @@ class PlayersLifecycleE2EIT {
         Allure.step("Прочитать и проверить профили всех 12 игроков", () -> {
             for (int index = 0; index < registered.size(); index++) {
                 var player = registered.get(index);
-                Allure.step("Проверить профиль игрока №" + (index + 1), () -> {
+                int number = index + 1;
+                Allure.step("Проверить профиль игрока №" + number, () -> {
                     var profile = run.profile(player.request());
-                    PublishedContractExpected.verifyProfileStatus(profile);
-                    ApiContract.player(run.codec().tree(profile.body()));
                     PlayersExpected.verifyProfile(profile, player.request(), player.id(), run.codec());
+                    deviations.check("Код профиля игрока №" + number + " соответствует заданию: 200",
+                            () -> PublishedContractExpected.verifyProfileStatus(profile));
+                    deviations.check("Профиль игрока №" + number + " соответствует PlayerResponseDTO",
+                            () -> PublishedContractExpected.verifyPlayerSchema(profile, run.codec()));
                 });
             }
         });
@@ -105,18 +118,25 @@ class PlayersLifecycleE2EIT {
         });
 
         Allure.step("Удалить всех подтверждённых собственных игроков", () -> {
-            // Обратный порядок отличает адресное удаление от ошибочного удаления первой записи.
-            for (var player : registered.reversed()) {
-                Allure.step("Удалить игрока и проверить ответ и оставшиеся записи", () -> {
+            for (int index : PlayerData.middleOutOrder(registered.size())) {
+                var player = registered.get(index);
+                int number = index + 1;
+                Allure.step("Удалить игрока №" + number + " и проверить ответ и оставшиеся записи", () -> {
                     var before = run.snapshot();
                     var response = run.delete(player, AuthorizationMode.VALID);
                     var after = run.snapshot();
                     PlayersExpected.verifyDeleted(response, player, before, after, run.codec());
-                    ApiContract.player(run.codec().tree(response.body()));
+                    deviations.check("Ответ удаления игрока №" + number + " соответствует PlayerResponseDTO",
+                            () -> PublishedContractExpected.verifyPlayerSchema(response, run.codec()));
                 });
             }
         });
-        Allure.step("Подтвердить полностью пустой итоговый список",
-                () -> PlayersExpected.verifyEmpty(PlayersExpected.readList(run.listResponse(), run.codec())));
+        Allure.step("Подтвердить полностью пустой итоговый список", () -> {
+            var remaining = PlayersExpected.readList(run.listResponse(), run.codec());
+            PlayersExpected.verifyEmpty(remaining);
+            run.confirmNothingOwned(remaining);
+        });
+        Allure.step("Сверить коды и схемы ответов с заданием и OpenAPI", deviations::verifyNone);
     }
+
 }

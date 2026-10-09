@@ -31,6 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("Жизненный цикл созданных игроков")
 class CreationJournalTest {
+    // Число попыток чтения снимка в очистке CreationJournal.
+    private static final int READ_ATTEMPTS = 3;
     private final UUID runId = UUID.randomUUID();
     private final MemoryOperations operations = new MemoryOperations();
 
@@ -39,7 +41,7 @@ class CreationJournalTest {
     void continuesAfterFirstDeletionFailure() {
         var journal = journal();
         for (int index = 1; index <= 3; index++)
-            journal.create(player(index));
+            create(journal, player(index));
         operations.failedDeletes = Set.of(id(1));
         var error = assertThrows(CleanupFailure.class, journal::close);
         assertEquals(List.of(id(1), id(2), id(3)), operations.deleted);
@@ -52,7 +54,7 @@ class CreationJournalTest {
     void aggregatesAllErrors() {
         var journal = journal();
         for (int index = 1; index <= 3; index++)
-            journal.create(player(index));
+            create(journal, player(index));
         operations.failedDeletes = Set.of(id(1), id(2));
         var error = assertThrows(CleanupFailure.class, journal::close);
         assertEquals(3, operations.deleted.size());
@@ -68,7 +70,7 @@ class CreationJournalTest {
         operations.failedDeletes = Set.of(id(1));
         var error = assertThrows(IllegalStateException.class, () -> {
             try (var journal = journal()) {
-                journal.create(player(1));
+                create(journal, player(1));
                 throw new IllegalStateException("Исходная ошибка сценария");
             }
         });
@@ -84,7 +86,7 @@ class CreationJournalTest {
         var rejection = assertThrows(AssertionError.class, () -> {
             try (var journal = journal()) {
                 var before = operations.list();
-                var result = journal.create(player(1));
+                var result = create(journal, player(1));
                 assertEquals(400, result.status());
                 // Независимое ожидание состояния обнаруживает дефект, несмотря на правильный код ответа.
                 assertEquals(before.size(), operations.list().size(), "Отклонённый запрос изменил данные");
@@ -101,7 +103,7 @@ class CreationJournalTest {
         operations.loseResponse = true;
         assertThrows(IllegalStateException.class, () -> {
             try (var journal = journal()) {
-                journal.create(player(1));
+                create(journal, player(1));
             }
         });
         assertTrue(operations.list().isEmpty());
@@ -114,7 +116,7 @@ class CreationJournalTest {
         operations.invalidBody = true;
         assertThrows(PayloadException.class, () -> {
             try (var journal = journal()) {
-                HttpResult response = journal.create(player(1));
+                HttpResult response = create(journal, player(1));
                 new JsonCodec().decode(response.body(), ObservedCreatedPlayerResponse.class);
             }
         });
@@ -126,7 +128,7 @@ class CreationJournalTest {
     void preservesBaselineRecordDuringDuplicateAttempt() {
         operations.create(player(1));
         try (var journal = journal()) {
-            journal.create(player(1));
+            create(journal, player(1));
         }
         assertEquals(Set.of(id(1)), operations.records.keySet());
         assertEquals(List.of(id(2)), operations.deleted);
@@ -136,7 +138,7 @@ class CreationJournalTest {
     @DisplayName("Уже удалённый ID не удаляется повторно при закрытии журнала")
     void doesNotRepeatConfirmedDeletion() {
         try (var journal = journal()) {
-            journal.create(player(1));
+            create(journal, player(1));
             operations.delete(id(1));
         }
         assertEquals(List.of(id(1)), operations.deleted);
@@ -146,7 +148,7 @@ class CreationJournalTest {
     @DisplayName("Повторное закрытие не повторяет DELETE после ошибки очистки")
     void closeIsSinglePass() {
         var journal = journal();
-        journal.create(player(1));
+        create(journal, player(1));
         operations.failedDeletes = Set.of(id(1));
         assertThrows(CleanupFailure.class, journal::close);
         journal.close();
@@ -157,7 +159,7 @@ class CreationJournalTest {
     @DisplayName("Подмена владельца существующего ID блокирует удаление чужой записи")
     void neverDeletesReassignedIdentity() {
         var journal = journal();
-        journal.create(player(1));
+        create(journal, player(1));
         operations.records.put(id(1),
                 new ObservedPlayerResponse(id(1), "foreign", "foreign@example.test", "Другой", "Игрок", null));
         var error = assertThrows(CleanupFailure.class, journal::close);
@@ -172,7 +174,7 @@ class CreationJournalTest {
         operations.normalizeEmail = true;
         operations.createStatus = 400;
         try (var journal = journal()) {
-            journal.create(
+            create(journal,
                     new CreatePlayerRequest(original.currencyCode(), "", original.name(), original.passwordChange(),
                             original.passwordRepeat(), original.surname(), original.username()));
             assertEquals(1, journal.ownedIds().size());
@@ -198,7 +200,7 @@ class CreationJournalTest {
     @DisplayName("Недоступное перечитывание владения не разрешает DELETE по устаревшему снимку")
     void skipsDeletionWithoutFreshOwnership() {
         var journal = journal();
-        journal.create(player(1));
+        create(journal, player(1));
         operations.failReads = true;
         var error = assertThrows(CleanupFailure.class, journal::close);
         assertTrue(operations.deleted.isEmpty());
@@ -207,31 +209,82 @@ class CreationJournalTest {
     }
 
     @Test
-    @DisplayName("Один сбой начального поиска не блокирует очистку с доступным свежим снимком каждого ID")
-    void continuesAfterInitialOwnershipReadFailure() {
+    @DisplayName("Кратковременный сбой чтения поглощается повтором и не оставляет записей")
+    void retriesTransientOwnershipRead() {
         var journal = journal();
         for (int index = 1; index <= 3; index++)
-            journal.create(player(index));
-        operations.failNextRead = true;
+            create(journal, player(index));
+        operations.failNextReads = 2;
 
-        var error = assertThrows(CleanupFailure.class, journal::close);
+        journal.close();
 
         assertEquals(List.of(id(1), id(2), id(3)), operations.deleted);
         assertTrue(operations.records.isEmpty());
-        assertTrue(error.unresolvedIds().isEmpty());
-        assertEquals(List.of(new CleanupFailure.Problem("поиск перед очисткой", null, "IllegalStateException")),
-                error.problems());
+    }
+
+    @Test
+    @DisplayName("Недоступный начальный поиск не мешает очистке, подтверждённой свежими и итоговым снимками")
+    void continuesAfterInitialOwnershipReadFailure() {
+        var journal = journal();
+        for (int index = 1; index <= 3; index++)
+            create(journal, player(index));
+        operations.failNextReads = READ_ATTEMPTS;
+
+        journal.close();
+
+        assertEquals(List.of(id(1), id(2), id(3)), operations.deleted);
+        assertTrue(operations.records.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Потерянный ответ DELETE при фактическом удалении не делает очистку неуспешной")
+    void acceptsLostDeleteResponseWhenFinalSnapshotIsClean() {
+        var journal = journal();
+        create(journal, player(1));
+        create(journal, player(2));
+        operations.lostDeleteResponses = Set.of(id(1));
+
+        journal.close();
+
+        assertEquals(List.of(id(1), id(2)), operations.deleted);
+        assertTrue(operations.records.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Проверенный пустой снимок закрывает журнал без резервных DELETE")
+    void closesWithoutDeletionWhenNothingRemains() {
+        var journal = journal();
+        create(journal, player(1));
+        operations.records.clear();
+
+        assertTrue(journal.closeIfNothingRemains(operations.list()));
+        journal.close();
+
+        assertTrue(operations.deleted.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Снимок с собственной записью не заменяет резервную очистку")
+    void keepsCleanupWhenOwnRecordRemains() {
+        var journal = journal();
+        create(journal, player(1));
+
+        assertFalse(journal.closeIfNothingRemains(operations.list()));
+        journal.close();
+
+        assertEquals(List.of(id(1)), operations.deleted);
+        assertTrue(operations.records.isEmpty());
     }
 
     @Test
     @DisplayName("После сбоя начального поиска свежий снимок всё равно защищает чужую запись")
     void preservesReassignedIdentityAfterInitialReadFailure() {
         var journal = journal();
-        journal.create(player(1));
-        journal.create(player(2));
+        create(journal, player(1));
+        create(journal, player(2));
         operations.records.put(id(1),
                 new ObservedPlayerResponse(id(1), "foreign", "foreign@example.test", "Другой", "Игрок", "USD"));
-        operations.failNextRead = true;
+        operations.failNextReads = READ_ATTEMPTS;
 
         var error = assertThrows(CleanupFailure.class, journal::close);
 
@@ -248,8 +301,8 @@ class CreationJournalTest {
     @DisplayName("Подмена владельца между двумя DELETE обнаруживается свежим снимком")
     void checksOwnershipBeforeEveryDeletion() {
         var journal = journal();
-        journal.create(player(1));
-        journal.create(player(2));
+        create(journal, player(1));
+        create(journal, player(2));
         operations.afterDelete = deleted -> operations.records.put(id(2),
                 new ObservedPlayerResponse(id(2), "foreign", "foreign@example.test", "Другой", "Игрок", "USD"));
         var error = assertThrows(CleanupFailure.class, journal::close);
@@ -258,21 +311,54 @@ class CreationJournalTest {
         assertEquals("foreign", operations.records.get(id(2)).username());
     }
 
-    /** Design: recovery. Steps: потерять один снимок после DELETE. Expected: пропуск второго, очистка третьего. */
+    /** Design: recovery. Steps: потерять снимок перед вторым DELETE. Expected: третий удалён, второй — в следующем проходе. */
     @Test
-    @DisplayName("Ошибка свежего снимка одного ID не прерывает безопасную очистку остальных")
+    @DisplayName("Ошибка свежего снимка одного ID не прерывает очистку, а ID удаляется следующим проходом")
     void continuesAfterOneOwnershipReadFailure() {
         var journal = journal();
         for (int index = 1; index <= 3; index++)
-            journal.create(player(index));
+            create(journal, player(index));
         operations.afterDelete = deleted -> {
             if (deleted.equals(id(1)))
-                operations.failNextRead = true;
+                operations.failNextReads = READ_ATTEMPTS;
         };
-        var error = assertThrows(CleanupFailure.class, journal::close);
-        assertEquals(List.of(id(1), id(3)), operations.deleted);
-        assertEquals(List.of(id(2)), error.unresolvedIds());
-        assertEquals("поиск перед DELETE", error.problems().getFirst().operation());
+
+        journal.close();
+
+        assertEquals(List.of(id(1), id(3), id(2)), operations.deleted);
+        assertTrue(operations.records.isEmpty());
+    }
+
+    /**
+     * Design: recovery. Steps: потерять ответ второго POST и все попытки начального чтения.
+     * Expected: запись, найденная свежим чтением во время очистки, тоже удаляется.
+     */
+    @Test
+    @DisplayName("Запись после потерянного ответа POST, найденная во время очистки, тоже удаляется")
+    void deletesOwnRecordFoundDuringCleanup() {
+        var journal = journal();
+        create(journal, player(1));
+        loseCreateResponse(journal, player(2));
+        operations.failNextReads = READ_ATTEMPTS;
+
+        journal.close();
+
+        assertEquals(List.of(id(1), id(2)), operations.deleted);
+        assertTrue(operations.records.isEmpty());
+    }
+
+    /** Design: recovery. Steps: единственная запись без ответа POST, начальное чтение недоступно. Expected: удалена. */
+    @Test
+    @DisplayName("Недоступный начальный снимок не оставляет единственную запись без ответа POST")
+    void searchesAgainWhenInitialSnapshotIsUnavailable() {
+        var journal = journal();
+        loseCreateResponse(journal, player(1));
+        operations.failNextReads = READ_ATTEMPTS;
+
+        journal.close();
+
+        assertEquals(List.of(id(1)), operations.deleted);
+        assertTrue(operations.records.isEmpty());
     }
 
     /** Design: forbidden effect. Steps: DELETE 200 сохраняет запись. Expected: cleanup не подтверждён. */
@@ -280,7 +366,7 @@ class CreationJournalTest {
     @DisplayName("DELETE 200 без удаления не даёт успешного результата очистки")
     void detectsSuccessfulDeletionWithoutEffect() {
         var journal = journal();
-        journal.create(player(1));
+        create(journal, player(1));
         operations.preserveDeleted = true;
         var error = assertThrows(CleanupFailure.class, journal::close);
         assertEquals(List.of(id(1)), error.unresolvedIds());
@@ -292,13 +378,14 @@ class CreationJournalTest {
     @DisplayName("Исчезновение старого ID не скрывает собственную запись с новым ID")
     void detectsOwnRecordReappearingWithNewId() {
         var journal = journal();
-        journal.create(player(1));
+        create(journal, player(1));
         var original = operations.records.get(id(1));
         operations.afterDelete = deleted -> operations.records.put(id(77), new ObservedPlayerResponse(id(77),
                 original.username(), original.email(), original.name(), original.surname(), original.currencyCode()));
         var error = assertThrows(CleanupFailure.class, journal::close);
         assertEquals(List.of(id(77)), error.unresolvedIds());
-        assertEquals(List.of(id(1)), operations.deleted);
+        // Собственная запись с новым ID удаляется один раз; повторное появление остаётся неразрешённым.
+        assertEquals(List.of(id(1), id(77)), operations.deleted);
     }
 
     /** Design: ambiguity. Steps: дублировать ID снимка до создания. Expected: POST не выполняется. */
@@ -309,7 +396,7 @@ class CreationJournalTest {
                 new ObservedPlayerResponse(id(99), "foreign", "other@example.test", "Другой", "Игрок", "USD"));
         operations.duplicateSnapshot = true;
         var journal = journal();
-        assertThrows(IllegalStateException.class, () -> journal.create(player(1)));
+        assertThrows(IllegalStateException.class, () -> create(journal, player(1)));
         assertEquals(0, operations.createCalls);
         assertTrue(operations.deleted.isEmpty());
     }
@@ -319,7 +406,7 @@ class CreationJournalTest {
     @DisplayName("Неоднозначный снимок перед очисткой запрещает удаление")
     void blocksDeletionOnDuplicateOwnershipId() {
         var journal = journal();
-        journal.create(player(1));
+        create(journal, player(1));
         operations.duplicateSnapshot = true;
         var error = assertThrows(CleanupFailure.class, journal::close);
         assertTrue(operations.deleted.isEmpty());
@@ -333,7 +420,7 @@ class CreationJournalTest {
         operations.records.put(id(99),
                 new ObservedPlayerResponse(id(99), "foreign", "foreign@example.test", "Другой", "Игрок", "USD"));
         var journal = journal();
-        journal.create(player(1));
+        create(journal, player(1));
         operations.records.remove(id(99));
         var second = player(2);
         journal.beginAttempt(second.email(), second.username());
@@ -354,6 +441,22 @@ class CreationJournalTest {
     private CreationJournal journal() {
         return new CreationJournal(runId, operations);
     }
+
+    /** Ответ POST потерян после записи: сверка после создания не выполняется. */
+    private void loseCreateResponse(CreationJournal journal, CreatePlayerRequest request) {
+        journal.beginAttempt(request.email(), request.username());
+        operations.loseResponse = true;
+        assertThrows(IllegalStateException.class, () -> operations.create(request));
+        operations.loseResponse = false;
+    }
+
+    /** Попытка регистрируется до POST, фактическое состояние сверяется после него. */
+    private HttpResult create(CreationJournal journal, CreatePlayerRequest request) {
+        journal.beginAttempt(request.email(), request.username());
+        var result = operations.create(request);
+        journal.reconcile();
+        return result;
+    }
     private CreatePlayerRequest player(int index) {
         return PlayerData.player(runId, index, "USD", "Игрок " + index);
     }
@@ -368,16 +471,16 @@ class CreationJournalTest {
         private boolean loseResponse;
         private boolean invalidBody;
         private boolean normalizeEmail;
+        private Set<String> lostDeleteResponses = Set.of();
         private boolean failReads;
-        private boolean failNextRead;
+        private int failNextReads;
         private boolean duplicateSnapshot;
         private boolean preserveDeleted;
         private int createCalls;
         private Consumer<String> afterDelete = ignored -> {
         };
 
-        @Override
-        public HttpResult create(CreatePlayerRequest request) {
+        private HttpResult create(CreatePlayerRequest request) {
             createCalls++;
             String id = id((int) ++sequence);
             var player = new ObservedPlayerResponse(id, request.username(),
@@ -393,8 +496,8 @@ class CreationJournalTest {
 
         @Override
         public List<ObservedPlayerResponse> list() {
-            if (failReads || failNextRead) {
-                failNextRead = false;
+            if (failReads || failNextReads > 0) {
+                failNextReads = Math.max(0, failNextReads - 1);
                 throw new IllegalStateException("Снимок недоступен");
             }
             var snapshot = new ArrayList<>(records.values());
@@ -411,6 +514,8 @@ class CreationJournalTest {
             if (!preserveDeleted)
                 records.remove(id);
             afterDelete.accept(id);
+            if (lostDeleteResponses.contains(id))
+                throw new IllegalStateException("Потерян ответ после удаления");
             return HttpResult.json(200, "{}");
         }
     }

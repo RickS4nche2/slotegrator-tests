@@ -2,6 +2,7 @@ package qa.slotegrator.tests.self.reporting;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Locale;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,22 @@ class ReportSanitizerTest {
         assertFalse(safe.contains(marker));
         assertTrue(safe.contains("Анна"));
         assertTrue(raw.contains(marker), "Исходное тело не должно измениться");
+    }
+
+    /**
+     * Design: имена полей сессии и авторизации вне базового набора. Steps: тело с такими полями и отражением токена.
+     * Expected: значения и токен после схемы Bearer скрыты в теле и в последующем тексте.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"session", "sessionId", "bearer", "pwd", "pass", "Authorization", "x_session_key"})
+    @DisplayName("Поля сессии, авторизации и сокращённых паролей скрываются вместе с отражениями")
+    void masksSessionAndAuthorizationFields(String field) {
+        String marker = "dummy-" + field.toLowerCase(Locale.ROOT) + "-secret";
+        String raw = "{\"" + field + "\":\"Bearer " + marker + "\",\"name\":\"Анна\"}";
+        String safe = sanitizer.body(raw.getBytes(StandardCharsets.UTF_8));
+        assertFalse(safe.contains(marker));
+        assertTrue(safe.contains("Анна"));
+        assertFalse(sanitizer.text("echo " + marker).contains(marker), "Отражение токена после Bearer скрывается");
     }
 
     @Test

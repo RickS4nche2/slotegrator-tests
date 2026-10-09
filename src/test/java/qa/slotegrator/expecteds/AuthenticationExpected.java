@@ -42,16 +42,21 @@ public final class AuthenticationExpected {
                 "Наблюдаемый ответ входа должен содержать непустую строку accessToken");
     }
 
+    /** Отсутствующий или неверный Basic при корректном JSON: точный 401 без выдачи токена. */
+    public static void verifyRejectedBasic(HttpResult response, JsonCodec codec) {
+        if (response.status() == OBSERVED_LOGIN_STATUS) {
+            // BUG-006 узнаётся только по прежней успешной выдаче токена; иной ответ остаётся новым сбоем.
+            verifyObservedLogin(response, codec);
+            KnownFailure.BASIC_AUTH_IGNORED.rejectIf(true);
+        }
+        verifyRejectedLogin(response, 401, codec);
+    }
+
     /**
      * Точный отказ — принятое правило проекта для опубликованных 400/401.
      * См. docs/api-spec.md. Ошибки не имеют опубликованной схемы; проверяем отсутствие выдачи токена.
      */
     public static void verifyRejectedLogin(HttpResult response, int expectedStatus, JsonCodec codec) {
-        if (expectedStatus == 401 && response.status() == OBSERVED_LOGIN_STATUS) {
-            // BUG-006 узнаётся только по прежней успешной выдаче токена; иной ответ остаётся новым сбоем.
-            verifyObservedLogin(response, codec);
-            KnownFailure.BASIC_AUTH_IGNORED.rejectIf(true);
-        }
         assertEquals(expectedStatus, response.status(), "Код отказа входа отличается от выбранного требования");
         verifyNoIssuedToken(response, codec);
     }

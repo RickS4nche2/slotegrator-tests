@@ -9,7 +9,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import qa.slotegrator.api.ApiRoutes;
-import qa.slotegrator.api.model.PlayerLookupRequest;
 import qa.slotegrator.fixtures.LocalServer;
 import qa.slotegrator.helpers.auth.ApiSession;
 import qa.slotegrator.helpers.config.AuthSettings;
@@ -50,9 +49,9 @@ class ApiSessionTest {
                     stream.write(result);
                 }
             });
-            server.on(ApiRoutes.GET_PLAYER, exchange -> {
+            server.on(ApiRoutes.GET_PLAYERS, exchange -> {
                 bearer.set(exchange.getRequestHeaders().getFirst("Authorization"));
-                assertEquals("POST", exchange.getRequestMethod());
+                assertEquals("GET", exchange.getRequestMethod());
                 byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
                 exchange.sendResponseHeaders(201, body.length);
                 try (var stream = exchange.getResponseBody()) {
@@ -63,7 +62,7 @@ class ApiSessionTest {
             session.authenticate();
             assertTrue(basic.get().startsWith("Basic "), "Схема входа должна быть Basic");
             assertTrue(password.get().equals("dummy-auth-password-A"), "Пароль должен дойти до локального ответчика");
-            var result = HttpResult.read(session.players().getOne(new PlayerLookupRequest("player@example.test")));
+            var result = HttpResult.read(session.players().getAll());
             assertEquals(201, result.status(), "Исходный статус не должен превращаться в 200");
             assertTrue(bearer.get().equals("Bearer dummy-auth-token-A"),
                     "Операция должна использовать полученный токен");

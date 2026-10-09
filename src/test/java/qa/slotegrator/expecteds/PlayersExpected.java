@@ -7,7 +7,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import tools.jackson.databind.JsonNode;
 
 import qa.slotegrator.api.ObservedPlayerContract;
 import qa.slotegrator.api.model.CreatePlayerRequest;
@@ -154,9 +157,16 @@ public final class PlayersExpected {
         for (var player : protectedPlayers) {
             for (String identifier : List.of(player.id(), player.email(), player.username())) {
                 if (!identifier.isBlank() && !suppliedIdentifiers.contains(identifier))
-                    assertTrue(!text.contains(identifier), "Отказ раскрыл идентификатор игрока сверх данных запроса");
+                    assertTrue(!containsToken(text, identifier),
+                            "Отказ раскрыл идентификатор игрока сверх данных запроса");
             }
         }
+    }
+
+    /** Идентификатор ищется целым значением: целочисленный id=1 не совпадает с цифрой внутри кода 401. */
+    private static boolean containsToken(String text, String identifier) {
+        return Pattern.compile("(?<![A-Za-z0-9_])" + Pattern.quote(identifier) + "(?![A-Za-z0-9_])")
+                .matcher(text).find();
     }
 
     public static void verifyDeleted(HttpResult response, RegisteredPlayer target,
@@ -190,7 +200,7 @@ public final class PlayersExpected {
                 "Порядок имён отличается от независимого эталона");
     }
 
-    private static ObservedPlayerResponse player(tools.jackson.databind.JsonNode body, String observedId) {
+    private static ObservedPlayerResponse player(JsonNode body, String observedId) {
         return new ObservedPlayerResponse(ObservedPlayerContract.playerId(body, observedId),
                 body.get("username").stringValue(), body.get("email").stringValue(), body.get("name").stringValue(),
                 body.get("surname").stringValue(), body.get("currency_code").stringValue());

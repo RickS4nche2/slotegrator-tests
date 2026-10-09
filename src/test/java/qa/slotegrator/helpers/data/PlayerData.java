@@ -1,5 +1,6 @@
 package qa.slotegrator.helpers.data;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -18,6 +19,21 @@ public final class PlayerData {
         return IntStream.range(0, names.size())
                 .mapToObj(index -> player(runId, index + 1, currencyCode, names.get(index)))
                 .toList();
+    }
+
+    /**
+     * Порядок проверяемых удалений от середины к краям: пока остаются соседи с обеих сторон, цель не совпадает
+     * ни с самой старой, ни с самой новой записью, поэтому удаление крайней записи вместо цели заметно.
+     */
+    public static List<Integer> middleOutOrder(int size) {
+        var order = new ArrayList<Integer>();
+        int middle = size / 2;
+        for (int step = 0; order.size() < size; step++) {
+            int index = step % 2 == 0 ? middle + step / 2 : middle - (step + 1) / 2;
+            if (index >= 0 && index < size)
+                order.add(index);
+        }
+        return List.copyOf(order);
     }
 
     /** Четыре символа по нижней границе схемы; принадлежность прогона сохраняется в длинном email. */

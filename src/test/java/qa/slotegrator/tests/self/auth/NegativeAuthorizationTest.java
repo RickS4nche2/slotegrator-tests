@@ -32,6 +32,7 @@ import qa.slotegrator.helpers.auth.AuthorizationMode;
 import qa.slotegrator.helpers.config.AuthSettings;
 import qa.slotegrator.helpers.http.HttpResult;
 import qa.slotegrator.helpers.json.JsonCodec;
+import qa.slotegrator.helpers.reporting.KnownFailure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -133,6 +134,23 @@ class NegativeAuthorizationTest {
                 HttpResult.json(401, "{\"accessToken\":\"synthetic-issued-token\"}"), 401, codec));
         assertThrows(AssertionError.class, () -> AuthenticationExpected.verifyRejectedLogin(
                 HttpResult.json(400, "{\"data\":[{\"access_token\":\"synthetic-issued-token\"}]}"), 400, codec));
+    }
+
+    /**
+     * Design: атрибуция известного дефекта. Steps: выдать токен на неверный JSON-пароль и на неверный Basic.
+     * Expected: BUG-006 узнаётся только в проверке Basic; выдача токена на неверный пароль остаётся новым сбоем.
+     */
+    @Test
+    @DisplayName("Выдача токена на неверный пароль тестера не считается известным дефектом Basic")
+    void attributesBasicBugOnlyToBasicRejection() {
+        var codec = new JsonCodec();
+        var issued = HttpResult.json(201, "{\"accessToken\":\"synthetic-issued-token\"}");
+        var passwordError = assertThrows(AssertionError.class,
+                () -> AuthenticationExpected.verifyRejectedLogin(issued, 401, codec));
+        assertFalse(passwordError instanceof KnownFailure.Violation, "Обход пароля не должен выглядеть как BUG-006");
+        var basicError = assertThrows(KnownFailure.Violation.class,
+                () -> AuthenticationExpected.verifyRejectedBasic(issued, codec));
+        assertEquals(KnownFailure.BASIC_AUTH_IGNORED, basicError.failure());
     }
 
     /**

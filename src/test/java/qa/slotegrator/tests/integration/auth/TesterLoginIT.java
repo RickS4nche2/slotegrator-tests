@@ -79,7 +79,7 @@ class TesterLoginIT {
         var response = Allure.step("Запросить вход с выбранным отрицательным Basic",
                 () -> session.loginWithAuthorization(session.validLoginRequest(), mode));
         Allure.step("Вход отклонён с HTTP 401 без выдачи токена",
-                () -> AuthenticationExpected.verifyRejectedLogin(response, 401, session.codec()));
+                () -> AuthenticationExpected.verifyRejectedBasic(response, session.codec()));
     }
 
     /**

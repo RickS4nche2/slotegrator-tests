@@ -152,6 +152,13 @@ public final class PlayersTestContext implements AutoCloseable {
         return session.codec();
     }
 
+    /** Проверенный пустой итог заменяет резервную очистку, если журнал подтверждает отсутствие своих записей. */
+    public void confirmNothingOwned(List<ObservedPlayerResponse> current) {
+        ensureAuthenticated();
+        if (!cleanupAttempted && journal.closeIfNothingRemains(current))
+            cleanupAttempted = true;
+    }
+
     public void cleanup() {
         if (cleanupAttempted || journal == null)
             return;

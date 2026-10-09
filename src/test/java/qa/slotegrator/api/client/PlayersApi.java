@@ -6,18 +6,10 @@ import feign.RequestLine;
 import feign.Response;
 
 import qa.slotegrator.api.ApiRoutes;
-import qa.slotegrator.api.model.CreatePlayerRequest;
-import qa.slotegrator.api.model.PlayerLookupRequest;
 
-/** Возвращается исходный ответ: HTTP-код не теряется при декодировании DTO. */
+/** Чтение и удаление для подготовки и очистки; исходный ответ сохраняет HTTP-код. */
 @Headers({"Content-Type: application/json", "Accept: application/json"})
 public interface PlayersApi {
-    @RequestLine("POST " + ApiRoutes.CREATE_PLAYER)
-    Response create(CreatePlayerRequest request);
-
-    @RequestLine("POST " + ApiRoutes.GET_PLAYER)
-    Response getOne(PlayerLookupRequest request);
-
     @RequestLine("GET " + ApiRoutes.GET_PLAYERS)
     Response getAll();
 

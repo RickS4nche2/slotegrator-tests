@@ -22,9 +22,4 @@ public final class PlayerId {
         if (!isSafe(value))
             throw new IllegalArgumentException("ID не соответствует безопасной форме");
     }
-
-    public static void requireObserved(String value) {
-        if (!isObserved(value))
-            throw new IllegalArgumentException("ID не соответствует безопасной наблюдаемой форме");
-    }
 }

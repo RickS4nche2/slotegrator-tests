@@ -60,32 +60,42 @@ public final class ExpectedFailureExtension implements InvocationInterceptor, Te
             return;
         }
         var expected = selected.getFirst();
-        var bug = Path.of("docs", "bugs", expected.bug() + ".md").toAbsolutePath();
-        Allure.issue(expected.bug(), bug.toUri().toString());
-        Allure.attachment("Описание " + expected.bug(), "text/markdown", Files.readString(bug, StandardCharsets.UTF_8));
-        if (enabled.equals("false")) {
-            invocation.proceed();
-            return;
-        }
         try {
             invocation.proceed();
         } catch (Throwable error) {
+            // Ссылка на баг ставится только при точном воспроизведении: посторонний сбой не выглядит известным.
             if (!expected.failure().matches(error))
                 throw error;
+            linkKnownBug(expected);
+            if (enabled.equals("false"))
+                throw error;
             Allure.label("expectedFailure", "XFAIL");
-            Allure.label("knownBug", expected.bug());
             throw new TestAbortedException("XFAIL " + expected.bug() + ": " + expected.failure().description()
                     + " (docs/bugs/" + expected.bug() + ".md)");
         }
+        linkKnownBug(expected);
+        if (enabled.equals("false")) {
+            // В строгом режиме успех остаётся успехом, но устаревшая отметка видна в отчёте.
+            Allure.label("expectedFailure", "NOT_REPRODUCED");
+            return;
+        }
         Allure.label("expectedFailure", "XPASS");
-        Allure.label("knownBug", expected.bug());
         throw new AssertionError("XPASS " + expected.bug()
                 + ": известный дефект не воспроизвёлся; перепроверьте и снимите ExpectedFailure");
+    }
+
+    private static void linkKnownBug(ExpectedFailure expected) throws Exception {
+        var bug = Path.of("docs", "bugs", expected.bug() + ".md").toAbsolutePath();
+        Allure.label("knownBug", expected.bug());
+        Allure.issue(expected.bug(), bug.toUri().toString());
+        Allure.attachment("Описание " + expected.bug(), "text/markdown", Files.readString(bug, StandardCharsets.UTF_8));
     }
 
     private static void validate(ExpectedFailure expected, List<Object> arguments) {
         if (!expected.bug().matches("BUG-[0-9]{3}"))
             throw new IllegalArgumentException("Известный дефект должен иметь идентификатор BUG-NNN");
+        if (!expected.bug().equals(expected.failure().bug()))
+            throw new IllegalArgumentException("Признак " + expected.failure() + " относится к другому дефекту");
         if (!Files.isRegularFile(Path.of("docs", "bugs", expected.bug() + ".md")))
             throw new IllegalArgumentException("Отсутствует Markdown-описание известного дефекта " + expected.bug());
         if (arguments.isEmpty() != (expected.caseId().length == 0))

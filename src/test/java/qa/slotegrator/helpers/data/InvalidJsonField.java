@@ -13,7 +13,8 @@ public record InvalidJsonField(String field, Violation violation) {
         switch (violation) {
             case MISSING -> body.remove(field);
             case NULL -> body.putNull(field);
-            case NUMBER -> body.put(field, 123);
+            // После ошибочного приведения к строке число длиннее minLength=4: отказ возможен только по типу.
+            case NUMBER -> body.put(field, 12345);
             case EMPTY -> body.put(field, "");
             case TOO_SHORT -> body.put(field, "abc");
         }
