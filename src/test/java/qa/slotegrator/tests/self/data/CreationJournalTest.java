@@ -174,9 +174,7 @@ class CreationJournalTest {
         operations.normalizeEmail = true;
         operations.createStatus = 400;
         try (var journal = journal()) {
-            create(journal,
-                    new CreatePlayerRequest(original.currencyCode(), "", original.name(), original.passwordChange(),
-                            original.passwordRepeat(), original.surname(), original.username()));
+            create(journal, original.withEmail(""));
             assertEquals(1, journal.ownedIds().size());
         }
         assertTrue(operations.list().isEmpty());
@@ -380,8 +378,7 @@ class CreationJournalTest {
         var journal = journal();
         create(journal, player(1));
         var original = operations.records.get(id(1));
-        operations.afterDelete = deleted -> operations.records.put(id(77), new ObservedPlayerResponse(id(77),
-                original.username(), original.email(), original.name(), original.surname(), original.currencyCode()));
+        operations.afterDelete = deleted -> operations.records.put(id(77), original.withId(id(77)));
         var error = assertThrows(CleanupFailure.class, journal::close);
         assertEquals(List.of(id(77)), error.unresolvedIds());
         // Собственная запись с новым ID удаляется один раз; повторное появление остаётся неразрешённым.

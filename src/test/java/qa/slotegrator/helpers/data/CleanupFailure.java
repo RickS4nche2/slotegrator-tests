@@ -2,6 +2,9 @@ package qa.slotegrator.helpers.data;
 
 import java.util.List;
 
+import lombok.Getter;
+
+@Getter
 public final class CleanupFailure extends RuntimeException {
     public record Problem(String operation, String id, String errorType) {
     }
@@ -13,12 +16,5 @@ public final class CleanupFailure extends RuntimeException {
         super("Очистка не подтверждена: проблемы=" + problems + ", ID=" + unresolvedIds);
         this.problems = List.copyOf(problems);
         this.unresolvedIds = List.copyOf(unresolvedIds);
-    }
-
-    public List<Problem> problems() {
-        return problems;
-    }
-    public List<String> unresolvedIds() {
-        return unresolvedIds;
     }
 }

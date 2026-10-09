@@ -26,6 +26,7 @@
     <eclipse-formatter.version>4.41</eclipse-formatter.version>
     <junit.version>6.1.3</junit.version>
     <jackson.version>3.2.3</jackson.version>
+    <lombok.version>1.18.48</lombok.version>
     <api.test.tags>api</api.test.tags>
     <e2e.authorized>false</e2e.authorized>
     <allure.results.directory>${project.build.directory}/allure-results/api</allure.results.directory>
@@ -67,6 +68,12 @@
   </dependencyManagement>
 
   <dependencies>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>${lombok.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>tools.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
@@ -158,6 +165,14 @@
         <configuration>
           <parameters>true</parameters>
           <showWarnings>true</showWarnings>
+          <!-- Начиная с JDK 23 процессоры аннотаций подключаются явно. -->
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
           <!-- В проекте только test-исходники; полный проход не читает отсутствующий target/classes. -->
           <useIncrementalCompilation>false</useIncrementalCompilation>
         </configuration>

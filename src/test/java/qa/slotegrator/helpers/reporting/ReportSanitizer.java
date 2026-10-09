@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
+import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -17,6 +18,7 @@ import qa.slotegrator.helpers.json.JsonCodec;
 import qa.slotegrator.helpers.json.PayloadException;
 
 /** Реестр секретов принадлежит одному контексту; исходные запросы и ответы не изменяются. */
+@RequiredArgsConstructor
 public final class ReportSanitizer {
     public static final String HIDDEN = "[скрыто]";
     private static final Set<String> HEADERS = Set.of("authorization", "proxy-authorization", "cookie", "set-cookie");
@@ -25,10 +27,6 @@ public final class ReportSanitizer {
     private static final Pattern JWT = Pattern.compile("eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+");
     private final Set<String> secrets = ConcurrentHashMap.newKeySet();
     private final JsonCodec codec;
-
-    public ReportSanitizer(JsonCodec codec) {
-        this.codec = codec;
-    }
 
     public void remember(String value) {
         if (value != null && !value.isEmpty())

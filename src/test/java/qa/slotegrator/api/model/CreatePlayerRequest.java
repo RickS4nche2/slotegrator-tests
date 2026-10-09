@@ -1,7 +1,9 @@
 package qa.slotegrator.api.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.With;
 
+@With
 public record CreatePlayerRequest(
         @JsonProperty("currency_code") String currencyCode,
         String email,

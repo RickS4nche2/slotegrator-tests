@@ -47,6 +47,7 @@ API-набор содержит **58 случаев: 50 integration, 7 contract,
 | Rest Assured | 6.0.1 | Проверяемые HTTP-действия |
 | OpenFeign | 13.16 | Подготовка, снимки состояния и резервная очистка |
 | Jackson | 3.2.3 | DTO и исходный JSON |
+| Lombok | 1.18.48 | Конструкторы, методы доступа и копии records без шаблонного кода |
 | Allure Java / Maven / Report | 3.0.0 / 3.1.0 / 3.20.1 | Шаги, вложения и отчёты |
 | Spotless / Eclipse JDT | 3.10.4 / 4.41 | Форматирование Java |
 
@@ -64,6 +65,8 @@ cp config.example.properties config.local.properties
 ```
 
 В Windows cmd используйте `mvnw.cmd` вместо `./mvnw` и `copy config.example.properties config.local.properties` для копирования. В Java Properties обратный слэш в пути экранируется двойным слэшем.
+
+Lombok подключён процессором аннотаций Maven, отдельной установки не требует. В IntelliJ IDEA поддержка встроена: при запросе включите Annotation Processing.
 
 Для стенда заполните `BASIC_AUTH_USERNAME`, `BASIC_AUTH_PASSWORD`, `TESTER_EMAIL`, `TESTER_PASSWORD`, `CURRENCY_CODE`; в образце выбрана USD. При необходимости измените `BASE_URL` и таймауты. Переменные окружения имеют приоритет над файлом, включая пустые значения. Другой файл выбирается через `-Dapi.config.file=...`; `.env` автоматически не загружается.
 

@@ -56,20 +56,19 @@ class PlayersListExpectedTest {
             new ListCase("переставленные-записи", List.of(ANNA_ONE, BORIS, ANNA_TWO)));
     private static final List<ListCase> INVALID_MEMBERSHIP = List.of(
             new ListCase("пропущен-игрок", List.of(BORIS, ANNA_ONE)),
-            new ListCase("лишний-игрок", List.of(BORIS, ANNA_TWO, ANNA_ONE, withId(ANNA_ONE, EXTRA_ID))),
+            new ListCase("лишний-игрок", List.of(BORIS, ANNA_TWO, ANNA_ONE, ANNA_ONE.withId(EXTRA_ID))),
             new ListCase("дубликат-id", List.of(BORIS, ANNA_ONE, ANNA_ONE)),
-            new ListCase("подменён-валидный-id", List.of(BORIS, ANNA_TWO, withId(ANNA_ONE, EXTRA_ID))));
+            new ListCase("подменён-валидный-id", List.of(BORIS, ANNA_TWO, ANNA_ONE.withId(EXTRA_ID))));
     private static final List<ListCase> CHANGED_LIST_FIELDS = List.of(
-            new ListCase("подменено-имя", List.of(withName(BORIS, "Изменено сервисом"), ANNA_TWO, ANNA_ONE)),
+            new ListCase("подменено-имя", List.of(BORIS.withName("Изменено сервисом"), ANNA_TWO, ANNA_ONE)),
             new ListCase("поля-переставлены-между-id", List.of(BORIS,
-                    withId(ANNA_ONE, ANNA_TWO_ID), withId(ANNA_TWO, ANNA_ONE_ID))));
+                    ANNA_ONE.withId(ANNA_TWO_ID), ANNA_TWO.withId(ANNA_ONE_ID))));
     private static final List<ListCase> INVALID_SORTING = List.of(
             new ListCase("нарушен-порядок", List.of(ANNA_ONE, BORIS, ANNA_TWO)),
             new ListCase("потеряна-запись-с-тем-же-именем", List.of(ANNA_ONE, BORIS)),
             new ListCase("продублирована-запись-с-тем-же-именем", List.of(ANNA_ONE, ANNA_ONE, BORIS)),
-            new ListCase("изменена-запись-при-правильном-порядке", List.of(ANNA_ONE, ANNA_TWO,
-                    new ObservedPlayerResponse(BORIS_ID, BORIS.username(), "changed@example.test",
-                            BORIS.name(), BORIS.surname(), BORIS.currencyCode()))));
+            new ListCase("изменена-запись-при-правильном-порядке",
+                    List.of(ANNA_ONE, ANNA_TWO, BORIS.withEmail("changed@example.test"))));
 
     /**
      * Design: метаморфная проверка — перестановка ответа сохраняет состав и связь ID с исходным запросом.
@@ -188,16 +187,6 @@ class PlayersListExpectedTest {
 
     private static HttpResult response(List<ObservedPlayerResponse> players) {
         return HttpResult.json(200, CODEC.text(players));
-    }
-
-    private static ObservedPlayerResponse withId(ObservedPlayerResponse player, String id) {
-        return new ObservedPlayerResponse(id, player.username(), player.email(), player.name(), player.surname(),
-                player.currencyCode());
-    }
-
-    private static ObservedPlayerResponse withName(ObservedPlayerResponse player, String name) {
-        return new ObservedPlayerResponse(player.id(), player.username(), player.email(), name, player.surname(),
-                player.currencyCode());
     }
 
     private record ListCase(String id, List<ObservedPlayerResponse> players) {

@@ -2,6 +2,7 @@ package qa.slotegrator.helpers.json;
 
 import java.nio.charset.StandardCharsets;
 
+import lombok.Getter;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.DeserializationFeature;
@@ -13,6 +14,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Один неизменяемый JSON-кодек для обоих клиентов. */
 public final class JsonCodec {
+    @Getter
     private final JsonMapper mapper = JsonMapper.builder()
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -25,10 +27,6 @@ public final class JsonCodec {
                 config.setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail);
             })
             .build();
-
-    public JsonMapper mapper() {
-        return mapper;
-    }
 
     public byte[] encode(Object value) {
         try {

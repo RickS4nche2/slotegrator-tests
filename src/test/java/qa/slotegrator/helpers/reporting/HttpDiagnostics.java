@@ -7,14 +7,12 @@ import java.util.Map;
 import io.qameta.allure.Allure;
 import io.qameta.allure.http.HttpExchange;
 import io.qameta.allure.http.HttpExchangeBody;
+import lombok.RequiredArgsConstructor;
 
 /** Адаптер безопасных данных в нативное HTTP-вложение Allure 3. */
+@RequiredArgsConstructor
 public final class HttpDiagnostics {
     private final ReportSanitizer sanitizer;
-
-    public HttpDiagnostics(ReportSanitizer sanitizer) {
-        this.sanitizer = sanitizer;
-    }
 
     public void exchange(String method, String url, Map<String, ? extends Collection<String>> requestHeaders,
             byte[] requestBody, int status, Map<String, ? extends Collection<String>> responseHeaders,

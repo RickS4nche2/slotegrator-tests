@@ -215,8 +215,7 @@ public final class ExpectedFailureFixtures {
         var request = new CreatePlayerRequest("USD", "created@example.test", "Имя", "abc", "abc", "Фамилия", "created");
         var after = new ArrayList<ObservedPlayerResponse>();
         after.add(damageBaseline
-                ? new ObservedPlayerResponse(original.id(), "changed", original.email(), original.name(),
-                        original.surname(), "USD")
+                ? original.withUsername("changed")
                 : original);
         for (int index = 0; index < count; index++)
             after.add(new ObservedPlayerResponse("1123456789abcdef0123456" + index, request.username(), request.email(),

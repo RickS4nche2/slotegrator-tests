@@ -11,17 +11,14 @@ import io.restassured.filter.FilterContext;
 import io.restassured.response.Response;
 import io.restassured.specification.FilterableRequestSpecification;
 import io.restassured.specification.FilterableResponseSpecification;
+import lombok.RequiredArgsConstructor;
 
 import qa.slotegrator.helpers.json.JsonCodec;
 
+@RequiredArgsConstructor
 public final class SafeAllureFilter implements Filter {
     private final JsonCodec codec;
     private final HttpDiagnostics diagnostics;
-
-    public SafeAllureFilter(JsonCodec codec, HttpDiagnostics diagnostics) {
-        this.codec = codec;
-        this.diagnostics = diagnostics;
-    }
 
     @Override
     public Response filter(FilterableRequestSpecification request, FilterableResponseSpecification responseSpec,

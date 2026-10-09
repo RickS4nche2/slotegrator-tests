@@ -1,6 +1,11 @@
 package qa.slotegrator.helpers.reporting;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
 /** Явные признаки известных нарушений; сообщения и stack trace не участвуют в классификации. */
+@Getter
+@RequiredArgsConstructor
 public enum KnownFailure {
     LOGIN_STATUS_201("BUG-001", "Вход вернул 201 вместо документированного 200"), TOKEN_ACCESS_TOKEN_MISSING("BUG-002",
             "Вместо TokenDTO возвращён непустой accessToken"), PLAYER_ID_NOT_INTEGER("BUG-003",
@@ -15,19 +20,6 @@ public enum KnownFailure {
     private final String bug;
     private final String description;
 
-    KnownFailure(String bug, String description) {
-        this.bug = bug;
-        this.description = description;
-    }
-
-    public String bug() {
-        return bug;
-    }
-
-    public String description() {
-        return description;
-    }
-
     /** Вызывается оракулом после независимых проверок, которые известный дефект не должен скрывать. */
     public void rejectIf(boolean reproduced) {
         if (reproduced)
@@ -40,15 +32,12 @@ public enum KnownFailure {
     }
 
     public static final class Violation extends AssertionError {
+        @Getter
         private final KnownFailure failure;
 
         private Violation(KnownFailure failure) {
             super(failure.description);
             this.failure = failure;
-        }
-
-        public KnownFailure failure() {
-            return failure;
         }
     }
 }

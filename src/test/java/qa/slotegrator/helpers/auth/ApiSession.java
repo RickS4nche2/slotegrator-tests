@@ -9,6 +9,7 @@ import feign.Feign;
 import feign.auth.BasicAuthRequestInterceptor;
 import io.restassured.RestAssured;
 import io.restassured.specification.RequestSpecification;
+import lombok.Getter;
 
 import qa.slotegrator.api.ApiRoutes;
 import qa.slotegrator.api.client.PlayersApi;
@@ -32,7 +33,9 @@ public final class ApiSession {
     private static final String INVALID_BASIC_PASSWORD = "invalid-slotegrator-basic-password";
     private final ApiSettings settings;
     private final AuthSettings auth;
+    @Getter
     private final JsonCodec codec = new JsonCodec();
+    @Getter
     private final ReportSanitizer sanitizer = new ReportSanitizer(codec);
     private final HttpDiagnostics diagnostics = new HttpDiagnostics(sanitizer);
     // Один транспорт на сеанс; создание клиента не выполняет HTTP-запросов.
@@ -129,13 +132,6 @@ public final class ApiSession {
             request.header("Authorization", basic);
         }
         return HttpResult.read(RestAssured.given().spec(request).body(body).post(ApiRoutes.LOGIN));
-    }
-
-    public JsonCodec codec() {
-        return codec;
-    }
-    public ReportSanitizer sanitizer() {
-        return sanitizer;
     }
 
     private Feign.Builder builder() {

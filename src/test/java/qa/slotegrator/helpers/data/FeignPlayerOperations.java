@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
+import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.JsonNode;
 
 import qa.slotegrator.api.ObservedPlayerContract;
@@ -14,14 +15,10 @@ import qa.slotegrator.helpers.http.HttpResult;
 import qa.slotegrator.helpers.json.JsonCodec;
 
 /** Снимок корневого массива getAll по наблюдению стенда; некритичные поля не блокируют cleanup. */
+@RequiredArgsConstructor
 public final class FeignPlayerOperations implements PlayerOperations {
     private final PlayersApi api;
     private final JsonCodec codec;
-
-    public FeignPlayerOperations(PlayersApi api, JsonCodec codec) {
-        this.api = api;
-        this.codec = codec;
-    }
 
     @Override
     public List<ObservedPlayerResponse> list() {

@@ -15,7 +15,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.node.ObjectNode;
 
-import qa.slotegrator.api.model.LoginRequest;
 import qa.slotegrator.expecteds.AuthenticationExpected;
 import qa.slotegrator.helpers.auth.ApiSession;
 import qa.slotegrator.helpers.auth.AuthorizationMode;
@@ -91,7 +90,7 @@ class TesterLoginIT {
     @Tag("AUTH-04")
     void rejectsWrongTesterPassword() {
         var valid = session.validLoginRequest();
-        var invalid = new LoginRequest(valid.email(), valid.password() + "-invalid-login-password");
+        var invalid = valid.withPassword(valid.password() + "-invalid-login-password");
         var response = Allure.step("Войти с корректным Basic и неверным JSON-паролем",
                 () -> session.loginWithAuthorization(invalid, AuthorizationMode.VALID));
         Allure.step("Неверный пароль отклонён с HTTP 401 без выдачи токена",

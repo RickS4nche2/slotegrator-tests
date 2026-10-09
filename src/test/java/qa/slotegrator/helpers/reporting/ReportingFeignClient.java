@@ -6,15 +6,12 @@ import java.util.Map;
 import feign.Client;
 import feign.Request;
 import feign.Response;
+import lombok.RequiredArgsConstructor;
 
+@RequiredArgsConstructor
 public final class ReportingFeignClient implements Client {
     private final Client delegate;
     private final HttpDiagnostics diagnostics;
-
-    public ReportingFeignClient(Client delegate, HttpDiagnostics diagnostics) {
-        this.delegate = delegate;
-        this.diagnostics = diagnostics;
-    }
 
     @Override
     public Response execute(Request request, Request.Options options) throws IOException {

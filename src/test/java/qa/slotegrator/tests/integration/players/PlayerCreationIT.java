@@ -19,7 +19,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.node.ObjectNode;
 
-import qa.slotegrator.api.model.CreatePlayerRequest;
 import qa.slotegrator.api.model.ObservedPlayerResponse;
 import qa.slotegrator.expecteds.PlayersExpected;
 import qa.slotegrator.helpers.auth.AuthorizationMode;
@@ -104,8 +103,7 @@ class PlayerCreationIT {
         Allure.step("Подтвердить контрольного игрока перед граничным созданием",
                 () -> PlayersExpected.verifyOwnPlayers(before, List.of(neighbour)));
         var valid = context.newPlayerRequest("Граница");
-        var request = new CreatePlayerRequest(valid.currencyCode(), valid.email(), valid.name(),
-                "Aa1!", "Aa1!", valid.surname(), valid.username());
+        var request = valid.withPasswordChange("Aa1!").withPasswordRepeat("Aa1!");
 
         var response = Allure.step("Создать игрока с паролями на нижней границе длины",
                 () -> context.create(request));
@@ -139,8 +137,7 @@ class PlayerCreationIT {
         var occupied = before.stream().map(ObservedPlayerResponse::username).collect(Collectors.toSet());
         var username = PlayerData.minimumLengthUsername(occupied);
         var valid = context.newPlayerRequest("Граница");
-        var request = new CreatePlayerRequest(valid.currencyCode(), valid.email(), valid.name(),
-                valid.passwordChange(), valid.passwordRepeat(), valid.surname(), username);
+        var request = valid.withUsername(username);
 
         var response = Allure.step("Создать игрока со свободным username на нижней границе длины",
                 () -> context.create(request));
@@ -171,8 +168,7 @@ class PlayerCreationIT {
     void rejectsMatchingShortPasswords() {
         var neighbour = context.preparePlayer("Контрольный");
         var valid = context.newPlayerRequest("Отклоняемый");
-        var request = new CreatePlayerRequest(valid.currencyCode(), valid.email(), valid.name(),
-                "abc", "abc", valid.surname(), valid.username());
+        var request = valid.withPasswordChange("abc").withPasswordRepeat("abc");
         var before = Allure.step("Прочитать исходное состояние перед созданием с короткими паролями",
                 () -> context.snapshot());
         Allure.step("Подтвердить контрольного игрока перед созданием с короткими паролями",

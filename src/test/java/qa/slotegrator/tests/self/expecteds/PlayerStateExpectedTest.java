@@ -67,8 +67,7 @@ class PlayerStateExpectedTest {
     @Test
     @DisplayName("Известное сохранение плохого запроса не скрывает порчу исходного игрока")
     void rejectsChangedBaselineBeforeKnownCreationFailure() {
-        var changed = new ObservedPlayerResponse(NEIGHBOR.id(), NEIGHBOR.username(), NEIGHBOR.email(),
-                "Искажённый", NEIGHBOR.surname(), NEIGHBOR.currencyCode());
+        var changed = NEIGHBOR.withName("Искажённый");
         var error = assertThrows(AssertionError.class,
                 () -> PlayersExpected.verifyRejectedCreate(HttpResult.json(201, "{}"),
                         400, REQUEST, List.of(FOREIGN, NEIGHBOR), List.of(FOREIGN, OWN, changed)));
@@ -111,8 +110,7 @@ class PlayerStateExpectedTest {
     @Test
     @DisplayName("Один POST не должен незаметно создать две собственные записи")
     void rejectsDuplicateCreationBeforeCleanup() {
-        var duplicate = new ObservedPlayerResponse("000000000000000000000003", OWN.username(), OWN.email(),
-                OWN.name(), OWN.surname(), OWN.currencyCode());
+        var duplicate = OWN.withId("000000000000000000000003");
         assertDoesNotThrow(() -> PlayersExpected.verifyCreationState(List.of(FOREIGN, NEIGHBOR), BEFORE, TARGET));
         assertThrows(AssertionError.class, () -> PlayersExpected.verifyCreationState(List.of(FOREIGN, NEIGHBOR),
                 List.of(FOREIGN, NEIGHBOR, OWN, duplicate), TARGET));
